@@ -19,8 +19,8 @@
         h1 { margin-bottom: 10px; color: #333; }
         p { color: #666; margin-bottom: 30px; }
         
-        /* 웹캠 화면 스타일 */
-        #webcam-container {
+        /* 컨테이너 스타일 (웹캠 & 이미지 공통) */
+        .view-container {
             border: 5px solid #fff;
             border-radius: 15px;
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
@@ -29,21 +29,28 @@
             height: 300px;
             background-color: #ddd;
             margin-bottom: 20px;
-            /* 후면 카메라는 object-fit으로 비율 유지 */
             position: relative;
+            display: none; /* 기본 숨김 */
+            justify-content: center;
+            align-items: center;
         }
         
-        /* 캔버스 크기 강제 조절 */
-        #webcam-container canvas {
+        #webcam-container canvas, #uploaded-image {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: cover; /* 꽉 차게 */
         }
 
-        /* 버튼 스타일 */
-        button {
+        /* 버튼 그룹 */
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button, .upload-label {
             padding: 12px 24px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
             color: #fff;
             background-color: #007bff;
@@ -52,9 +59,20 @@
             cursor: pointer;
             transition: background-color 0.2s;
             box-shadow: 0 4px 6px rgba(0,123,255,0.3);
+            display: inline-block;
         }
+        
+        /* 업로드 버튼 색상 다르게 */
+        .upload-label {
+            background-color: #17a2b8; 
+            box-shadow: 0 4px 6px rgba(23, 162, 184, 0.3);
+        }
+        
         button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .upload-label:hover { background-color: #117a8b; }
+        
+        /* 파일 인풋 숨김 */
+        #image-upload { display: none; }
 
         /* 결과 표시 영역 */
         #result-container {
@@ -73,7 +91,6 @@
             margin: 10px 0;
         }
         
-        /* 링크 이동 버튼 스타일 */
         .link-btn {
             display: inline-block;
             margin-top: 15px;
@@ -93,20 +110,29 @@
 <body>
 
     <h1>🏢 건물 정보 알리미</h1>
-    <p>건물을 카메라에 비추면 정보를 알려드려요.</p>
+    <p>카메라로 찍거나 사진을 올려보세요.</p>
 
-    <button id="start-btn" type="button" onclick="init()">📷 카메라 켜기</button>
+    <div class="btn-group">
+        <button id="cam-btn" onclick="startWebcam()">📷 카메라</button>
+        
+        <label for="image-upload" class="upload-label">📁 사진 선택</label>
+        <input type="file" id="image-upload" accept="image/*" onchange="handleImageUpload(event)">
+    </div>
     
-    <div id="webcam-container"></div>
+    <div id="webcam-container" class="view-container"></div>
+    
+    <div id="image-container" class="view-container">
+        <img id="uploaded-image" src="#" alt="Uploaded Image">
+    </div>
     
     <div id="result-container">
-        <h2 id="label-name">분석 중...</h2>
+        <h2 id="label-name">분석 대기 중...</h2>
         
         <div style="height:8px; background:#eee; width:100%; border-radius:5px; overflow:hidden; margin-bottom:10px;">
              <div id="prob-fill" style="height:100%; width:0%; background:#28a745; transition: width 0.2s;"></div>
         </div>
         
-        <p id="msg" style="font-size:14px; color:#888;">건물을 정확히 비춰주세요</p>
+        <p id="msg" style="font-size:14px; color:#888;">분석할 이미지를 선택하세요</p>
         <a id="link-btn" class="link-btn" href="#" target="_self">정보 보러가기</a>
     </div>
 
@@ -114,7 +140,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     
     <script type="text/javascript">
-        // ✅ 사용자 설정
+        // ✅ 설정 영역
         const URL = "https://teachablemachine.withgoogle.com/models/gDFVICxCS/";
         const urlMap = {
             "Class 1": "https://rkddmltlf.github.io/4",
@@ -122,97 +148,10 @@
         };
 
         let model, webcam, maxPredictions;
-        let isRunning = false;
+        let isWebcamRunning = false;
 
-        async function init() {
-            const startBtn = document.getElementById("start-btn");
-            startBtn.innerText = "로딩 중...";
-            startBtn.disabled = true;
-
-            const modelURL = URL + "model.json";
-            const metadataURL = URL + "metadata.json";
-
-            try {
-                model = await tmImage.load(modelURL, metadataURL);
-                maxPredictions = model.getTotalClasses();
-
-                // 📸 핵심 변경 사항: 후면 카메라 설정
-                const flip = false; // 후면 카메라는 거울모드 끄기
-                const width = 300;
-                const height = 300;
-                
-                webcam = new tmImage.Webcam(width, height, flip); 
-                
-                // setup() 안에 { facingMode: "environment" }를 넣으면 후면 카메라가 켜집니다.
-                await webcam.setup({ facingMode: "environment" }); 
-                
-                // iOS 호환성을 위해 playsinline 속성 추가
-                webcam.canvas.setAttribute("playsinline", true); 
-                webcam.canvas.setAttribute("muted", true);
-
-                await webcam.play();
-                
-                document.getElementById("webcam-container").innerHTML = "";
-                document.getElementById("webcam-container").appendChild(webcam.canvas);
-                
-                startBtn.style.display = "none";
-                document.getElementById("result-container").style.display = "block";
-                
-                isRunning = true;
-                window.requestAnimationFrame(loop);
-            } catch (error) {
-                alert("카메라 실행 실패: " + error.message);
-                startBtn.innerText = "다시 시도";
-                startBtn.disabled = false;
-            }
-        }
-
-        async function loop() {
-            if(isRunning){
-                webcam.update(); 
-                await predict();
-                window.requestAnimationFrame(loop);
-            }
-        }
-
-        async function predict() {
-            const prediction = await model.predict(webcam.canvas);
-            
-            let highestProb = 0;
-            let bestClassName = "";
-
-            for (let i = 0; i < maxPredictions; i++) {
-                if (prediction[i].probability > highestProb) {
-                    highestProb = prediction[i].probability;
-                    bestClassName = prediction[i].className;
-                }
-            }
-
-            const labelName = document.getElementById("label-name");
-            const linkBtn = document.getElementById("link-btn");
-            const probFill = document.getElementById("prob-fill");
-            const msg = document.getElementById("msg");
-
-            probFill.style.width = (highestProb * 100) + "%";
-
-            if (highestProb > 0.85) {
-                labelName.innerText = bestClassName; 
-                msg.innerText = "건물이 확인되었습니다!";
-                
-                if (urlMap[bestClassName]) {
-                    linkBtn.href = urlMap[bestClassName];
-                    linkBtn.innerText = bestClassName + " 정보 보러가기";
-                    linkBtn.style.pointerEvents = "auto"; 
-                    linkBtn.style.backgroundColor = "#28a745"; 
-                }
-            } else {
-                labelName.innerText = "탐색 중...";
-                msg.innerText = "건물을 더 제대로 비춰주세요.";
-                linkBtn.innerText = "인식 대기 중...";
-                linkBtn.style.pointerEvents = "none"; 
-                linkBtn.style.backgroundColor = "#ccc"; 
-            }
-        }
-    </script>
-</body>
-</html>
+        // 모델 로드 함수 (처음 한 번만 실행됨)
+        async function loadModel() {
+            if (!model) {
+                const modelURL = URL + "model.json";
+                const metadataURL = URL
