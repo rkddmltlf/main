@@ -29,6 +29,15 @@
             height: 300px;
             background-color: #ddd;
             margin-bottom: 20px;
+            /* 후면 카메라는 object-fit으로 비율 유지 */
+            position: relative;
+        }
+        
+        /* 캔버스 크기 강제 조절 */
+        #webcam-container canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         /* 버튼 스타일 */
@@ -70,13 +79,13 @@
             margin-top: 15px;
             padding: 12px 0;
             width: 100%;
-            background-color: #ccc; /* 기본은 회색 */
+            background-color: #ccc;
             color: white;
             text-decoration: none;
             border-radius: 8px;
             font-weight: bold;
             font-size: 16px;
-            pointer-events: none; /* 인식 전 클릭 불가 */
+            pointer-events: none;
             transition: background 0.3s;
         }
     </style>
@@ -105,10 +114,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     
     <script type="text/javascript">
-        // ✅ 모델 URL (주신 URL 그대로 적용함)
+        // ✅ 사용자 설정
         const URL = "https://teachablemachine.withgoogle.com/models/gDFVICxCS/";
-        
-        // ✅ 주소 설정
         const urlMap = {
             "Class 1": "https://rkddmltlf.github.io/4",
             "Class 2": "https://rkddmltlf.github.io/4"  
@@ -129,9 +136,20 @@
                 model = await tmImage.load(modelURL, metadataURL);
                 maxPredictions = model.getTotalClasses();
 
-                const flip = false; 
-                webcam = new tmImage.Webcam(300, 300, flip); 
-                await webcam.setup(); 
+                // 📸 핵심 변경 사항: 후면 카메라 설정
+                const flip = false; // 후면 카메라는 거울모드 끄기
+                const width = 300;
+                const height = 300;
+                
+                webcam = new tmImage.Webcam(width, height, flip); 
+                
+                // setup() 안에 { facingMode: "environment" }를 넣으면 후면 카메라가 켜집니다.
+                await webcam.setup({ facingMode: "environment" }); 
+                
+                // iOS 호환성을 위해 playsinline 속성 추가
+                webcam.canvas.setAttribute("playsinline", true); 
+                webcam.canvas.setAttribute("muted", true);
+
                 await webcam.play();
                 
                 document.getElementById("webcam-container").innerHTML = "";
@@ -175,10 +193,8 @@
             const probFill = document.getElementById("prob-fill");
             const msg = document.getElementById("msg");
 
-            // 확률 바 업데이트
             probFill.style.width = (highestProb * 100) + "%";
 
-            // 정확도가 85% 이상일 때만 결과 인정
             if (highestProb > 0.85) {
                 labelName.innerText = bestClassName; 
                 msg.innerText = "건물이 확인되었습니다!";
@@ -187,17 +203,16 @@
                     linkBtn.href = urlMap[bestClassName];
                     linkBtn.innerText = bestClassName + " 정보 보러가기";
                     linkBtn.style.pointerEvents = "auto"; 
-                    linkBtn.style.backgroundColor = "#28a745"; // 초록색 활성화
+                    linkBtn.style.backgroundColor = "#28a745"; 
                 }
             } else {
                 labelName.innerText = "탐색 중...";
-                msg.innerText = "건물을 더 제대로 비춰주세요.";
+                msg.innerText = "건물을 더 가까이 비춰주세요.";
                 linkBtn.innerText = "인식 대기 중...";
                 linkBtn.style.pointerEvents = "none"; 
-                linkBtn.style.backgroundColor = "#ccc"; // 회색 비활성화
+                linkBtn.style.backgroundColor = "#ccc"; 
             }
         }
     </script>
 </body>
-
 </html>
