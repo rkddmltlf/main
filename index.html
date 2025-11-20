@@ -19,7 +19,6 @@
         h1 { margin-bottom: 10px; color: #333; }
         p { color: #666; margin-bottom: 30px; }
         
-        /* 컨테이너 스타일 (웹캠 & 이미지 공통) */
         .view-container {
             border: 5px solid #fff;
             border-radius: 15px;
@@ -30,7 +29,7 @@
             background-color: #ddd;
             margin-bottom: 20px;
             position: relative;
-            display: none; /* 기본 숨김 */
+            display: none;
             justify-content: center;
             align-items: center;
         }
@@ -38,15 +37,10 @@
         #webcam-container canvas, #uploaded-image {
             width: 100%;
             height: 100%;
-            object-fit: cover; /* 꽉 차게 */
+            object-fit: cover;
         }
 
-        /* 버튼 그룹 */
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+        .btn-group { display: flex; gap: 10px; margin-bottom: 20px; }
 
         button, .upload-label {
             padding: 12px 24px;
@@ -62,19 +56,13 @@
             display: inline-block;
         }
         
-        /* 업로드 버튼 색상 다르게 */
         .upload-label {
             background-color: #17a2b8; 
             box-shadow: 0 4px 6px rgba(23, 162, 184, 0.3);
         }
         
-        button:hover { background-color: #0056b3; }
-        .upload-label:hover { background-color: #117a8b; }
-        
-        /* 파일 인풋 숨김 */
         #image-upload { display: none; }
 
-        /* 결과 표시 영역 */
         #result-container {
             display: none;
             background: white;
@@ -114,7 +102,6 @@
 
     <div class="btn-group">
         <button id="cam-btn" onclick="startWebcam()">📷 카메라</button>
-        
         <label for="image-upload" class="upload-label">📁 사진 선택</label>
         <input type="file" id="image-upload" accept="image/*" onchange="handleImageUpload(event)">
     </div>
@@ -140,17 +127,20 @@
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     
     <script type="text/javascript">
-        // ✅ 설정 영역
+        // ⚠️ 중요: 티처블 머신에서 '3개 클래스'로 다시 학습 후 받은 새 URL을 넣으세요!
         const URL = "https://teachablemachine.withgoogle.com/models/gDFVICxCS/";
+
+        // ⚠️ 중요: Class 3를 추가했습니다. 티처블 머신 이름과 똑같이 맞춰주세요.
         const urlMap = {
-            "Class 1": "https://rkddmltlf.github.io/4",
-            "Class 2": "https://rkddmltlf.github.io/4"  
+            "4호관": "https://rkddmltlf.github.io/4",
+            "32호관": "https://rkddmltlf.github.io/4",
+            "5호관(봉림관)": "https://rkddmltlf.github.io/4" 
+            // 만약 Class 3는 다른 페이지로 가야 한다면 주소를 바꿔주세요.
         };
 
         let model, webcam, maxPredictions;
         let isWebcamRunning = false;
 
-        // 모델 로드 함수 (처음 한 번만 실행됨)
         async function loadModel() {
             if (!model) {
                 const modelURL = URL + "model.json";
@@ -160,22 +150,17 @@
             }
         }
 
-        // 1. 웹캠 모드 실행
         async function startWebcam() {
-            // UI 초기화
             document.getElementById("result-container").style.display = "block";
             document.getElementById("image-container").style.display = "none";
             const webcamContainer = document.getElementById("webcam-container");
             webcamContainer.style.display = "flex";
-            
             document.getElementById("label-name").innerText = "카메라 로딩 중...";
 
             await loadModel();
 
-            // 이미 웹캠이 켜져있으면 리턴
             if (isWebcamRunning) return;
 
-            // 웹캠 설정 (후면 카메라)
             const flip = false;
             webcam = new tmImage.Webcam(300, 300, flip);
             await webcam.setup({ facingMode: "environment" });
@@ -193,21 +178,18 @@
         async function loop() {
             if(isWebcamRunning) {
                 webcam.update(); 
-                await predict(webcam.canvas); // 웹캠 화면을 분석
+                await predict(webcam.canvas); 
                 window.requestAnimationFrame(loop);
             }
         }
 
-        // 2. 이미지 업로드 모드 실행
         async function handleImageUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
 
-            // 웹캠 끄기 (자원 절약 및 충돌 방지)
             isWebcamRunning = false; 
             if(webcam) { await webcam.stop(); }
 
-            // UI 전환
             document.getElementById("webcam-container").style.display = "none";
             document.getElementById("image-container").style.display = "flex";
             document.getElementById("result-container").style.display = "block";
@@ -217,18 +199,16 @@
 
             const imgElement = document.getElementById("uploaded-image");
             
-            // 파일을 읽어서 이미지 태그에 넣기
             const reader = new FileReader();
             reader.onload = function(e) {
                 imgElement.src = e.target.result;
                 imgElement.onload = async function() {
-                    await predict(imgElement); // 업로드된 사진을 분석
+                    await predict(imgElement); 
                 }
             };
             reader.readAsDataURL(file);
         }
 
-        // 3. 공통 예측 함수 (웹캠과 이미지 모두 사용)
         async function predict(imageInput) {
             const prediction = await model.predict(imageInput);
             
@@ -261,7 +241,7 @@
                 }
             } else {
                 labelName.innerText = isWebcamRunning ? "탐색 중..." : "인식 실패";
-                msg.innerText = isWebcamRunning ? "건물을 더 가까이 비춰주세요." : "다른 사진을 시도해보세요.";
+                msg.innerText = isWebcamRunning ? "건물을 더 제대로 비춰주세요." : "다른 사진을 시도해보세요.";
                 linkBtn.innerText = "인식 불가";
                 linkBtn.style.pointerEvents = "none"; 
                 linkBtn.style.backgroundColor = "#ccc"; 
