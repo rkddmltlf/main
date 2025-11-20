@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>건물 정보 서비스</title>
+    <style>
+        body {
+            font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            text-align: center;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h1 { margin-bottom: 10px; color: #333; }
+        p { color: #666; margin-bottom: 30px; }
+        
+        /* 웹캠 화면 스타일 */
+        #webcam-container {
+            border: 5px solid #fff;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+            width: 300px;
+            height: 300px;
+            background-color: #ddd;
+            margin-bottom: 20px;
+        }
+
+        /* 버튼 스타일 */
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            box-shadow: 0 4px 6px rgba(0,123,255,0.3);
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        /* 결과 표시 영역 */
+        #result-container {
+            display: none;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 300px;
+            text-align: center;
+        }
+        #label-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+        
+        /* 링크 이동 버튼 스타일 */
+        .link-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 12px 0;
+            width: 100%;
+            background-color: #ccc; /* 기본은 회색 */
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            pointer-events: none; /* 인식 전 클릭 불가 */
+            transition: background 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🏢 건물 정보 알리미</h1>
+    <p>건물을 카메라에 비추면 정보를 알려드려요.</p>
+
+    <button id="start-btn" type="button" onclick="init()">📷 카메라 켜기</button>
+    
+    <div id="webcam-container"></div>
+    
+    <div id="result-container">
+        <h2 id="label-name">분석 중...</h2>
+        
+        <div style="height:8px; background:#eee; width:100%; border-radius:5px; overflow:hidden; margin-bottom:10px;">
+             <div id="prob-fill" style="height:100%; width:0%; background:#28a745; transition: width 0.2s;"></div>
+        </div>
+        
+        <p id="msg" style="font-size:14px; color:#888;">건물을 정확히 비춰주세요</p>
+        <a id="link-btn" class="link-btn" href="#" target="_self">정보 보러가기</a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    
+    <script type="text/javascript">
+        // ✅ 모델 URL (주신 URL 그대로 적용함)
+        const URL = "https://teachablemachine.withgoogle.com/models/gDFVICxCS/";
+        
+        // ✅ 주소 설정
+        const urlMap = {
+            "Class 1": "https://rkddmltlf.github.io/4",
+            "Class 2": "https://rkddmltlf.github.io/4"  
+        };
+
+        let model, webcam, maxPredictions;
+        let isRunning = false;
+
+        async function init() {
+            const startBtn = document.getElementById("start-btn");
+            startBtn.innerText = "로딩 중...";
+            startBtn.disabled = true;
+
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            try {
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+
+                const flip = false; 
+                webcam = new tmImage.Webcam(300, 300, flip); 
+                await webcam.setup(); 
+                await webcam.play();
+                
+                document.getElementById("webcam-container").innerHTML = "";
+                document.getElementById("webcam-container").appendChild(webcam.canvas);
+                
+                startBtn.style.display = "none";
+                document.getElementById("result-container").style.display = "block";
+                
+                isRunning = true;
+                window.requestAnimationFrame(loop);
+            } catch (error) {
+                alert("카메라 실행 실패: " + error.message);
+                startBtn.innerText = "다시 시도";
+                startBtn.disabled = false;
+            }
+        }
+
+        async function loop() {
+            if(isRunning){
+                webcam.update(); 
+                await predict();
+                window.requestAnimationFrame(loop);
+            }
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            
+            let highestProb = 0;
+            let bestClassName = "";
+
+            for (let i = 0; i < maxPredictions; i++) {
+                if (prediction[i].probability > highestProb) {
+                    highestProb = prediction[i].probability;
+                    bestClassName = prediction[i].className;
+                }
+            }
+
+            const labelName = document.getElementById("label-name");
+            const linkBtn = document.getElementById("link-btn");
+            const probFill = document.getElementById("prob-fill");
+            const msg = document.getElementById("msg");
+
+            // 확률 바 업데이트
+            probFill.style.width = (highestProb * 100) + "%";
+
+            // 정확도가 85% 이상일 때만 결과 인정
+            if (highestProb > 0.85) {
+                labelName.innerText = bestClassName; 
+                msg.innerText = "건물이 확인되었습니다!";
+                
+                if (urlMap[bestClassName]) {
+                    linkBtn.href = urlMap[bestClassName];
+                    linkBtn.innerText = bestClassName + " 정보 보러가기";
+                    linkBtn.style.pointerEvents = "auto"; 
+                    linkBtn.style.backgroundColor = "#28a745"; // 초록색 활성화
+                }
+            } else {
+                labelName.innerText = "탐색 중...";
+                msg.innerText = "건물을 더 가까이 비춰주세요.";
+                linkBtn.innerText = "인식 대기 중...";
+                linkBtn.style.pointerEvents = "none"; 
+                linkBtn.style.backgroundColor = "#ccc"; // 회색 비활성화
+            }
+        }
+    </script>
+</body>
+</html>
